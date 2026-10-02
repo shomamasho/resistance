@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>AVALON</title>
+  <style>
+    :root {
+      --bg: #111418;
+      --card-bg: #1c2128;
+      --card-border: #30363d;
+      --text-main: #ffffff;
+      --text-sub: #8b949e;
+      --btn-bg: #2d333b;
+      --btn-border: #444c56;
+      --btn-active: #3e4752;
+      --accent: #58a6ff;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      background-color: var(--bg);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #app {
+      flex: 1;
+      padding: 20px;
+      max-width: 480px;
+      margin: 0 auto;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    h1, h2, h3 {
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-align: center;
+      margin: 0 0 16px 0;
+      color: var(--text-main);
+    }
+
+    p {
+      color: var(--text-sub);
+      font-size: 14px;
+      line-height: 1.6;
+      text-align: center;
+      margin: 0 0 20px 0;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .btn {
+      width: 100%;
+      background: var(--btn-bg);
+      border: 1px solid var(--btn-border);
+      color: var(--text-main);
+      padding: 16px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .btn:active {
+      background: var(--btn-active);
+    }
+
+    .btn-large {
+      padding: 24px;
+      font-size: 18px;
+    }
+
+    .btn-selected {
+      border: 2px solid var(--accent);
+      background: #1f2a38;
+    }
+
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+
+    .scoreboard {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 20px;
+    }
+
+    .round-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 54px;
+      padding: 8px 4px;
+      border-radius: 8px;
+      border: 1px solid var(--card-border);
+      background: var(--card-bg);
+      font-size: 12px;
+    }
+
+    .round-node.current {
+      border-color: var(--text-main);
+      background: #252d38;
+    }
+
+    .round-node.success {
+      border-color: #58a6ff;
+      color: #58a6ff;
+    }
+
+    .round-node.fail {
+      border-color: #f85149;
+      color: #f85149;
+    }
+
+    .round-num {
+      font-weight: 700;
+      font-size: 16px;
+      margin-top: 4px;
+      color: var(--text-main);
+    }
+
+    .input-field {
+      width: 100%;
+      background: #111418;
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .role-reveal-box {
+      border: 2px dashed var(--card-border);
+      padding: 24px 16px;
+      border-radius: 12px;
+      text-align: center;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .secret-text {
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.8;
+      color: var(--text-main);
+    }
+  </style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+// --- ゲーム定数（アヴァロン公式ルール準拠） ---
+const CONFIG = {
+  5:  { spies: 2, rounds: [2, 3, 2, 3, 3], twoFailsRequired: false },
+  6:  { spies: 2, rounds: [2, 3, 4, 3, 4], twoFailsRequired: false },
+  7:  { spies: 3, rounds: [2, 3, 3, 4, 4], twoFailsRequired: true  }, // 第4戦のみ失敗2票必要
+  8:  { spies: 3, rounds: [3, 4, 4, 5, 5], twoFailsRequired: true  },
+  9:  { spies: 3, rounds: [3, 4, 4, 5, 5], twoFailsRequired: true  },
+  10: { spies: 4, rounds: [3, 4, 4, 5, 5], twoFailsRequired: true  }
+};
+
+// --- アプリ状態 ---
+let state = {
+  screen: 'SETUP', // SETUP, REVEAL_HANDOFF, REVEAL_HOLD, BOARD, VOTE_HANDOFF, VOTE_ACTION, RESULT, ASSASSIN, END
+  playerCount: 6,
+  playerNames: ["プレイヤー1", "プレイヤー2", "プレイヤー3", "プレイヤー4", "プレイヤー5", "プレイヤー6"],
+  players: [], // { name, role, isSpy }
+  revealIndex: 0,
+  currentRound: 0, // 0 to 4
+  roundResults: [null, null, null, null, null], // true: 成功, false: 失敗
+  selectedNominees: [],
+  voteQueue: [],
+  currentVoterIndex: 0,
+  votes: [],
+  lastResultData: null
+};
+
+// ユーティリティ：配列シャッフル
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+// --- ロジック ---
+function startGame() {
+  const conf = CONFIG[state.playerCount];
+  const spyCount = conf.spies;
+  const resCount = state.playerCount - spyCount;
+
+  // 役職構成（マーリン1、アサシン1、一般スパイ、一般市民）
+  let roles = ['マーリン'];
+  for (let i = 0; i < resCount - 1; i++) roles.push('正義の市民');
+  roles.push('アサシン');
+  for (let i = 0; i < spyCount - 1; i++) roles.push('邪悪の手先');
+
+  roles = shuffle(roles);
+
+  state.players = state.playerNames.slice(0, state.playerCount).map((name, i) => {
+    const role = roles[i];
+    const isSpy = (role === 'アサシン' || role === '邪悪の手先');
+    return { id: i, name, role, isSpy };
+  });
+
+  state.revealIndex = 0;
+  state.currentRound = 0;
+  state.roundResults = [null, null, null, null, null];
+  state.screen = 'REVEAL_HANDOFF';
+  render();
+}
+
+function startVotePhase() {
+  state.voteQueue = [...state.selectedNominees];
+  state.currentVoterIndex = 0;
+  state.votes = [];
+  state.screen = 'VOTE_HANDOFF';
+  render();
+}
+
+function submitVote(voteVal) {
+  state.votes.push(voteVal);
+  state.currentVoterIndex++;
+  if (state.currentVoterIndex < state.voteQueue.length) {
+    state.screen = 'VOTE_HANDOFF';
+  } else {
+    // 開票処理
+    processMissionResults();
+  }
+  render();
+}
+
+function processMissionResults() {
+  const conf = CONFIG[state.playerCount];
+  const reqPlayers = conf.rounds[state.currentRound];
+  const fails = state.votes.filter(v => v === 'FAIL').length;
+  const successes = state.votes.filter(v => v === 'SUCCESS').length;
+
+  let isSuccess = false;
+  // 7人以上の第4戦のみ2票以上の失敗で失敗
+  if (conf.twoFailsRequired && state.currentRound === 3) {
+    isSuccess = (fails < 2);
+  } else {
+    isSuccess = (fails === 0);
+  }
+
+  state.roundResults[state.currentRound] = isSuccess;
+  state.lastResultData = { successes, fails, isSuccess };
+
+  const successCount = state.roundResults.filter(r => r === true).length;
+  const failCount = state.roundResults.filter(r => r === false).length;
+
+  if (successCount >= 3) {
+    state.screen = 'ASSASSIN';
+  } else if (failCount >= 3) {
+    state.screen = 'END';
+    state.winner = 'SPY_VICTORY';
+  } else {
+    state.screen = 'RESULT';
+  }
+}
+
+// --- レンダリング ---
+const app = document.getElementById('app');
+
+function render() {
+  app.innerHTML = '';
+  switch (state.screen) {
+    case 'SETUP': renderSetup(); break;
+    case 'REVEAL_HANDOFF': renderRevealHandoff(); break;
+    case 'REVEAL_HOLD': renderRevealHold(); break;
+    case 'BOARD': renderBoard(); break;
+    case 'VOTE_HANDOFF': renderVoteHandoff(); break;
+    case 'VOTE_ACTION': renderVoteAction(); break;
+    case 'RESULT': renderResult(); break;
+    case 'ASSASSIN': renderAssassin(); break;
+    case 'END': renderEnd(); break;
+  }
+}
+
+// 1. 設定画面
+function renderSetup() {
+  let playerInputsHtml = '';
+  for (let i = 0; i < state.playerCount; i++) {
+    playerInputsHtml += `
+      <input class="input-field" type="text" value="${state.playerNames[i]}" oninput="state.playerNames[${i}] = this.value">
+    `;
+  }
+
+  app.innerHTML = `
+    <h1>AVALON</h1>
+    <p>完全オフライン・スタンドアロンツール</p>
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <span style="font-weight:600;">参加人数</span>
+        <select class="input-field" style="width: auto; margin:0;" onchange="updatePlayerCount(this.value)">
+          ${[5,6,7,8,9,10].map(c => `<option value="${c}" ${c === state.playerCount ? 'selected' : ''}>${c}人</option>`).join('')}
+        </select>
+      </div>
+      <div style="font-size:13px; color:var(--text-sub); margin-bottom:12px;">
+        正義陣営: ${state.playerCount - CONFIG[state.playerCount].spies}人 / 邪悪陣営: ${CONFIG[state.playerCount].spies}人
+      </div>
+      ${playerInputsHtml}
+    </div>
+    <button class="btn btn-large" onclick="startGame()">配役を決定して開始</button>
+  `;
+}
+
+window.updatePlayerCount = function(val) {
+  state.playerCount = parseInt(val, 10);
+  while (state.playerNames.length < state.playerCount) {
+    state.playerNames.push(`プレイヤー${state.playerNames.length + 1}`);
+  }
+  render();
+};
+
+// 2. 役職受け渡し画面
+function renderRevealHandoff() {
+  const p = state.players[state.revealIndex];
+  app.innerHTML = `
+    <h2>端末を渡してください</h2>
+    <div class="card" style="text-align:center; padding: 32px 16px;">
+      <div style="font-size:13px; color:var(--text-sub); margin-bottom:8px;">対象者</div>
+      <div style="font-size:24px; font-weight:700;">${p.name}</div>
+    </div>
+    <p>周囲の人から画面が見えない角度にして、準備ができたら進んでください。</p>
+    <button class="btn btn-large" onclick="state.screen='REVEAL_HOLD'; render();">自分です（確認画面へ）</button>
+  `;
+}
+
+// 3. 役職長押し確認画面
+function renderRevealHold() {
+  const p = state.players[state.revealIndex];
+  
+  // 視界情報構築
+  let secretHtml = `<div style="font-size:20px; margin-bottom:16px;">【${p.role}】</div>`;
+  if (p.role === 'マーリン') {
+    const spies = state.players.filter(x => x.isSpy).map(x => x.name).join('、');
+    secretHtml += `<div style="font-size:14px; color:var(--text-sub);">視界情報（スパイ陣営）:</div><div style="margin-top:6px;">${spies}</div>`;
+  } else if (p.isSpy) {
+    const spyAllies = state.players.filter(x => x.isSpy && x.id !== p.id).map(x => x.name).join('、');
+    secretHtml += `<div style="font-size:14px; color:var(--text-sub);">仲間（スパイ陣営）:</div><div style="margin-top:6px;">${spyAllies || 'なし（単独）'}</div>`;
+  } else {
+    secretHtml += `<div style="font-size:14px; color:var(--text-sub);">味方やスパイの正体は不明です。議論から見極めてください。</div>`;
+  }
+
+  app.innerHTML = `
+    <h2>役職の確認</h2>
+    <p>画面中央を長押ししている間だけ表示されます。</p>
+    <div id="touch-area" class="role-reveal-box">
+      <div id="hidden-placeholder" style="color:var(--text-sub); font-size:15px;">長押しして表示</div>
+      <div id="revealed-content" class="secret-text" style="display:none;">${secretHtml}</div>
+    </div>
+    <button class="btn btn-large" onclick="finishReveal()">確認完了（次の人へ）</button>
+  `;
+
+  const touchArea = document.getElementById('touch-area');
+  const placeholder = document.getElementById('hidden-placeholder');
+  const content = document.getElementById('revealed-content');
+
+  const show = () => { placeholder.style.display = 'none'; content.style.display = 'block'; };
+  const hide = () => { placeholder.style.display = 'block'; content.style.display = 'none'; };
+
+  touchArea.addEventListener('touchstart', (e) => { e.preventDefault(); show(); });
+  touchArea.addEventListener('touchend', hide);
+  touchArea.addEventListener('mousedown', show);
+  touchArea.addEventListener('mouseup', hide);
+}
+
+window.finishReveal = function() {
+  state.revealIndex++;
+  if (state.revealIndex < state.players.length) {
+    state.screen = 'REVEAL_HANDOFF';
+  } else {
+    state.screen = 'BOARD';
+  }
+  render();
+};
+
+// 4. メインボード画面
+function renderBoard() {
+  const conf = CONFIG[state.playerCount];
+  const reqCount = conf.rounds[state.currentRound];
+
+  let boardHtml = '<div class="scoreboard">';
+  for (let i = 0; i < 5; i++) {
+    const res = state.roundResults[i];
+    let cls = '';
+    let statusText = `${conf.rounds[i]}人`;
+    if (res === true) { cls = 'success'; statusText = '成功'; }
+    else if (res === false) { cls = 'fail'; statusText = '失敗'; }
+    else if (i === state.currentRound) { cls = 'current'; }
+
+    boardHtml += `
+      <div class="round-node ${cls}">
+        <div>第${i + 1}戦</div>
+        <div class="round-num">${statusText}</div>
+      </div>
+    `;
+  }
+  boardHtml += '</div>';
+
+  let listHtml = '';
+  state.players.forEach(p => {
+    const isSelected = state.selectedNominees.includes(p.id);
+    listHtml += `
+      <div class="list-item" style="cursor:pointer; ${isSelected ? 'border-color:var(--accent); background:#1e2530;' : ''}" onclick="toggleNominee(${p.id})">
+        <span style="font-weight:600;">${p.name}</span>
+        <span style="font-size:13px; color:${isSelected ? 'var(--accent)' : 'var(--text-sub)'};">
+          ${isSelected ? '遠征隊' : '待機'}
+        </span>
+      </div>
+    `;
+  });
+
+  const canProceed = (state.selectedNominees.length === reqCount);
+
+  app.innerHTML = `
+    <h2>第${state.currentRound + 1}戦 任務指名</h2>
+    <p>リアルでリーダーを決め、信任投票を行ってください。<br>承認されたメンバー（${reqCount}人）を選択してください。</p>
+    ${boardHtml}
+    <div style="margin-bottom:12px;">${listHtml}</div>
+    <button class="btn btn-large" ${canProceed ? '' : 'disabled style="opacity:0.4;"'} onclick="startVotePhase()">
+      ${canProceed ? 'このメンバーで投票へ進む' : `あと${reqCount - state.selectedNominees.length}人選択`}
+    </button>
+  `;
+}
+
+window.toggleNominee = function(id) {
+  const conf = CONFIG[state.playerCount];
+  const reqCount = conf.rounds[state.currentRound];
+  const idx = state.selectedNominees.indexOf(id);
+
+  if (idx > -1) {
+    state.selectedNominees.splice(idx, 1);
+  } else {
+    if (state.selectedNominees.length < reqCount) {
+      state.selectedNominees.push(id);
+    }
+  }
+  render();
+};
+
+// 5. 投票受け渡し画面
+function renderVoteHandoff() {
+  const voterId = state.voteQueue[state.currentVoterIndex];
+  const voter = state.players.find(p => p.id === voterId);
+
+  app.innerHTML = `
+    <h2>任務の実行</h2>
+    <div class="card" style="text-align:center; padding:32px 16px;">
+      <div style="font-size:13px; color:var(--text-sub); margin-bottom:8px;">端末を渡してください</div>
+      <div style="font-size:24px; font-weight:700;">${voter.name}</div>
+    </div>
+    <p>周囲からボタンをタップする指の位置が見えないよう、手元を隠して操作してください。</p>
+    <button class="btn btn-large" onclick="state.screen='VOTE_ACTION'; render();">投票画面を開く</button>
+  `;
+}
+
+// 6. 投票アクション画面（位置ランダム・同色・押し間違い防止）
+function renderVoteAction() {
+  const voterId = state.voteQueue[state.currentVoterIndex];
+  const voter = state.players.find(p => p.id === voterId);
+
+  // ボタン順をランダム決定
+  const isTopSuccess = Math.random() >= 0.5;
+
+  let topBtnHtml = '';
+  let bottomBtnHtml = '';
+
+  const getSuccessBtn = () => `
+    <button class="btn btn-large" style="min-height:90px;" onclick="confirmAction('SUCCESS')">
+      任務を【成功】させる
+    </button>
+  `;
+
+  const getFailBtn = () => {
+    if (!voter.isSpy) {
+      // 正義陣営は誤押し防止のため無効化
+      return `
+        <button class="btn btn-large" style="min-height:90px; opacity:0.3;" onclick="alert('正義陣営は失敗を選択できません。')">
+          任務を【失敗】させる<br><span style="font-size:11px;">(市民は選択不可)</span>
+        </button>
+      `;
+    } else {
+      return `
+        <button class="btn btn-large" style="min-height:90px;" onclick="confirmAction('FAIL')">
+          任務を【失敗】させる
+        </button>
+      `;
+    }
+  };
+
+  if (isTopSuccess) {
+    topBtnHtml = getSuccessBtn();
+    bottomBtnHtml = getFailBtn();
+  } else {
+    topBtnHtml = getFailBtn();
+    bottomBtnHtml = getSuccessBtn();
+  }
+
+  app.innerHTML = `
+    <h2>任務投票</h2>
+    <p>どちらか一方を慎重にタップしてください。<br>（ボタンの位置は毎回ランダムです）</p>
+    <div style="margin-top:20px;">
+      ${topBtnHtml}
+      ${bottomBtnHtml}
+    </div>
+  `;
+}
+
+window.confirmAction = function(val) {
+  submitVote(val);
+};
+
+// 7. 結果発表画面
+function renderResult() {
+  const r = state.lastResultData;
+  app.innerHTML = `
+    <h2>第${state.currentRound + 1}戦 結果</h2>
+    <div class="card" style="text-align:center; padding:32px 16px;">
+      <div style="font-size:28px; font-weight:700; margin-bottom:12px; color:${r.isSuccess ? '#58a6ff' : '#f85149'};">
+        【任務${r.isSuccess ? '成功' : '失敗'}】
+      </div>
+      <div style="font-size:16px; color:var(--text-main); margin-top:8px;">
+        成功: ${r.successes}票 / 失敗: ${r.fails}票
+      </div>
+    </div>
+    <p>誰が裏切ったのか、あるいは全員が味方だったのか。議論を進めてください。</p>
+    <button class="btn btn-large" onclick="nextRound()">次のラウンドへ</button>
+  `;
+}
+
+window.nextRound = function() {
+  state.currentRound++;
+  state.selectedNominees = [];
+  state.screen = 'BOARD';
+  render();
+};
+
+// 8. 暗殺フェーズ（正義側が3勝した場合）
+function renderAssassin() {
+  const nonSpies = state.players.filter(p => !p.isSpy);
+  let listHtml = '';
+  nonSpies.forEach(p => {
+    listHtml += `
+      <button class="btn" onclick="executeAssassination(${p.id})">
+        ${p.name}
+      </button>
+    `;
+  });
+
+  app.innerHTML = `
+    <h2>正義側が3勝達成</h2>
+    <p style="color:#f85149; font-weight:600;">【アサシン暗殺フェーズ】</p>
+    <p>アサシンは議論を行い、誰が「マーリン」かを推理して1名選択してください。的中すれば邪悪側の逆転勝利です。</p>
+    <div class="card">
+      ${listHtml}
+    </div>
+  `;
+}
+
+window.executeAssassination = function(targetId) {
+  const target = state.players.find(p => p.id === targetId);
+  if (target.role === 'マーリン') {
+    state.winner = 'SPY_ASSASSINATED_MERLIN';
+  } else {
+    state.winner = 'RESISTANCE_VICTORY';
+  }
+  state.screen = 'END';
+  render();
+};
+
+// 9. ゲーム終了画面
+function renderEnd() {
+  let title = '';
+  let sub = '';
+  if (state.winner === 'RESISTANCE_VICTORY') {
+    title = '正義陣営の勝利';
+    sub = 'マーリンは正体を隠し通し、遠征隊は任務を完遂しました。';
+  } else if (state.winner === 'SPY_ASSASSINATED_MERLIN') {
+    title = '邪悪陣営の逆転勝利';
+    sub = 'アサシンは見事にマーリンを特定し、暗殺を成し遂げました。';
+  } else {
+    title = '邪悪陣営の勝利';
+    sub = '遠征隊は3回の任務失敗により壊滅しました。';
+  }
+
+  let rolesListHtml = '';
+  state.players.forEach(p => {
+    rolesListHtml += `
+      <div class="list-item">
+        <span>${p.name}</span>
+        <span style="color:var(--text-sub);">${p.role}</span>
+      </div>
+    `;
+  });
+
+  app.innerHTML = `
+    <h2>ゲーム終了</h2>
+    <div class="card" style="text-align:center; padding:24px 16px;">
+      <div style="font-size:22px; font-weight:700; margin-bottom:8px;">${title}</div>
+      <div style="font-size:13px; color:var(--text-sub);">${sub}</div>
+    </div>
+    <div class="card">
+      <div style="font-weight:600; margin-bottom:8px; font-size:14px;">全員の配役結果</div>
+      ${rolesListHtml}
+    </div>
+    <button class="btn btn-large" onclick="state.screen='SETUP'; render();">もう一度遊ぶ</button>
+  `;
+}
+
+// 初期起動
+render();
+</script>
+</body>
+</html>
